@@ -22,7 +22,7 @@ Each $E_j$ has coordinates $(x_{E_j}, y_{E_j})$, a table membership $T_{E_j} \in
 4. $intersects(L, T):$ true iff segment $L$ properly crosses at least one edge of $T$ (endpoint touches excluded)
 5. $vertices(T):$ corner vertices of table $T$, indexed $[\nu_0, \nu_1, \ldots]$ in counter-clockwise order
 6. $vertices(T)[i]:$ $i^{th}$ element in $vertices(T)$
-7. $offset_vertices(T):$ offset vertices of table $T$, indexed $[\hat\nu_0, \hat\nu_1, \ldots]$ in the same order as $vertices(T)$, each displaced $d_{off}$ metres radially outward from the centroid: $\hat\nu_i = \nu_i + d_{off} \cdot \dfrac{\nu_i - \bar\nu}{|\nu_i - \bar\nu|}$
+7. $offset\_vertices(T):$ offset vertices of table $T$, indexed $[\hat\nu_0, \hat\nu_1, \ldots]$ in the same order as $vertices(T)$, each displaced $d_{off}$ metres radially outward from the centroid: $\hat\nu_i = \nu_i + d_{off} \cdot \dfrac{\nu_i - \bar\nu}{|\nu_i - \bar\nu|}$
 8. $index(\nu, T):$ the index $i$ such that $vertices(T)[i] = \nu$
 9. $normal\_angle(E):$ outward normal angle [rad] of the table edge that exhibit $E$ sits on, computed as $\text{atan2}(-e_x, e_y)$ where $\vec{e} = \nu_{i+1} - \nu_i$ is the edge vector
 10. $phase:$ "WALK", "APPROACH" or "STOP"
@@ -94,7 +94,7 @@ $\texttt{\# pick the smaller partition: fewest vertices -> shortest detour:}$
 9. $i := index(\nu_{start},\, T_{blocking})$
 10. **if** $vertices(T_{blocking})[(i + 1) \bmod |vertices(T_{blocking})|] \in V:$ &nbsp; $\delta := +1$ &nbsp; **else:** &nbsp; $\delta := -1$ $\texttt{\# CCW or CW}$
 11. **while** $vertices(T_{blocking})[i] \in V:$ $\texttt{\# visit waypoints in sequence}$
-    1. $\hat\nu_i := offset_vertices(T_{blocking})[i]$
+    1. $\hat\nu_i := offset\_vertices(T_{blocking})[i]$
     2. **while** $D(S,\, \hat\nu_i) \geq 0.05:$ &nbsp; $\text{Move}(S,\, \hat\nu_i,\, \texttt{WALK})$
     3. $i := (i + \delta) \bmod |vertices(T_{blocking})|$
 
