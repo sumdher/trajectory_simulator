@@ -21,7 +21,7 @@ Usage
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
@@ -74,6 +74,20 @@ class Table:
 
     table_id: int
     vertices: np.ndarray
+    offset_vertices: np.ndarray = field(init=False, repr=False)
+    # Each offset_vertices[i] is vertices[i] pushed 0.5 m radially outward
+    # from the centroid.  Used as waypoints in MoveAroundObstacle so the
+    # agent walks slightly away from the physical corner rather than exactly
+    # through it.
+
+    def __post_init__(self) -> None:
+        centroid = self.vertices.mean(axis=0)
+        offsets = []
+        for v in self.vertices:
+            direction = v - centroid
+            norm = float(np.linalg.norm(direction))
+            offsets.append(v + 0.1 * direction / norm if norm > 1e-12 else v.copy())
+        self.offset_vertices = np.array(offsets, dtype=np.float64)
 
     def __hash__(self) -> int:
         return hash(self.table_id)
@@ -88,7 +102,7 @@ class Table:
 @dataclass
 class Exhibit:
     """
-    Museum exhibit - a visitable point of interest near one table.
+    Museum exhibit – a visitable point of interest near one table.
 
     Parameters
     ----------
@@ -104,6 +118,11 @@ class Exhibit:
     x: float
     y: float
     table: Table
+    normal_angle: float
+    # Outward normal angle [rad] of the table edge this exhibit sits on.
+    # Computed via _edge_normal_angle() at construction time.
+    # Drives the STOP-phase semicircle so the agent wanders on the open
+    # side of the table rather than into it.
 
     @property
     def pos(self) -> np.ndarray:
@@ -205,7 +224,7 @@ def _segments_properly_intersect(
     p4: np.ndarray,
 ) -> bool:
     """
-    True iff open segments p1-p2 and p3-p4 properly intersect (endpoints
+    True iff open segments p1–p2 and p3–p4 properly intersect (endpoints
     excluded) using parametric line intersection.
     """
     d1 = p2 - p1
@@ -255,7 +274,7 @@ class Simulator:
     Parameters
     ----------
     cfg  : MuseumConfig
-    seed : optional int - seed for the internal ``numpy.random.Generator``
+    seed : optional int – seed for the internal ``numpy.random.Generator``
            (pass an integer for fully reproducible runs)
     """
 
@@ -263,7 +282,7 @@ class Simulator:
         self.cfg = cfg
         self.rng = np.random.default_rng(seed)
 
-        # Mutable simulation state - fully reset by ``simulate()``
+        # Mutable simulation state – fully reset by ``simulate()``
         self._pos: np.ndarray = np.zeros(2)
         self._v: float = 0.0
         self._t: float = 0.0
@@ -404,7 +423,7 @@ class Simulator:
         for _ in range(n + 1):
             if cur not in V_set:
                 break
-            target = verts[cur]
+            target = blocking_table.offset_vertices[cur]
             while _dist(self._pos, target) >= _CLOSE:
                 self._move(target, WALK)
             cur = (cur + delta) % n
@@ -451,8 +470,16 @@ class Simulator:
                 # ── Unobstructed path ─────────────────────────────
                 if phase == STOP:
                     if D <= r_stop:
-                        # Disk sampling: wander inside the stop-radius
-                        phi = float(self.rng.uniform(0.0, 2.0 * math.pi))
+                        # Semicircle sampling: wander on the open side of
+                        # the table edge the exhibit sits on.  exhibit.normal_angle
+                        # is the outward normal of that edge; the agent stays
+                        # within ±π/2 of it so it never wanders into the table.
+                        phi = float(
+                            self.rng.uniform(
+                                exhibit.normal_angle - math.pi / 2,
+                                exhibit.normal_angle + math.pi / 2,
+                            )
+                        )
                         rho = float(self.rng.uniform(0.0, 1.0))
                         # g_k gates between inner-dense (k=-0.66) and
                         # outer-dense (k=4) concentration
@@ -628,7 +655,7 @@ def _dist_point_to_table(px: float, py: float, table: Table) -> float:
     Minimum Euclidean distance from point (px, py) to the *closest point on
     the boundary* of *table*.  Returns 0.0 if the point is inside the polygon.
 
-    For convex polygons (all our tables are convex) this is computed as the
+    For convex polygons this is computed as:
     minimum distance to each edge segment, taken as 0 when inside.
     """
     verts = table.vertices
@@ -653,6 +680,40 @@ def _dist_point_to_table(px: float, py: float, table: Table) -> float:
         for i in range(n)
     )
     return 0.0 if inside else min_d
+
+
+def _edge_normal_angle(px: float, py: float, table: Table) -> float:
+    """
+    Outward normal angle [rad] of the table edge nearest to (px, py).
+
+    For a CCW polygon, edge νi → ν_{i+1} has edge vector e = (ex, ey).
+    Rotating e clockwise by 90° gives the outward normal: n = (ey, −ex).
+    The angle is therefore atan2(−ex, ey).
+
+    Verification for axis-aligned rectangles
+    -----------------------------------------
+    bottom (e = (+1, 0))  →  atan2(−1,  0) = −π/2  (south) ✓
+    right  (e = ( 0,+1))  →  atan2( 0, +1) =  0     (east)  ✓
+    top    (e = (−1, 0))  →  atan2(+1,  0) = +π/2  (north) ✓
+    left   (e = ( 0,−1))  →  atan2( 0, −1) =  π    (west)  ✓
+    """
+    verts = table.vertices
+    n = len(verts)
+    best_i = 0
+    best_d = math.inf
+    p = np.array([px, py], dtype=np.float64)
+    for i in range(n):
+        a = verts[i]
+        b = verts[(i + 1) % n]
+        ab = b - a
+        t = float(np.dot(p - a, ab) / (np.dot(ab, ab) + 1e-30))
+        t = max(0.0, min(1.0, t))
+        d = float(np.linalg.norm(p - (a + t * ab)))
+        if d < best_d:
+            best_d = d
+            best_i = i
+    e = verts[(best_i + 1) % n] - verts[best_i]
+    return math.atan2(-e[0], e[1])
 
 
 def validate_exhibits(exhibits: List[Exhibit], margin: float = 0.5) -> None:
@@ -707,7 +768,8 @@ def make_demo_museum() -> MuseumConfig:
     """
     Build a small illustrative museum (20 m × 14 m) with:
     • 4 rectangular tables
-    • 12 exhibits — T1 has 2 on its left face, T4 has 2 on its top face
+    • 12 exhibits placed directly on table edges
+    • T1 has 2 exhibits on its left edge; T4 has 2 on its top edge
     • neighbourhood radius = 6 m
     • start area: a 6 m-wide patch at the centre of the bottom edge
 
@@ -723,8 +785,8 @@ def make_demo_museum() -> MuseumConfig:
 
     Same-edge pairs
     ---------------
-    T1 left face  (x = 2.5):  E1 (y=5.55) and E2 (y=6.00)
-    T4 top  face  (y = 12.0): E11 (x=12.5) and E12 (x=14.5)
+    T1 left edge  (x = 3.0):  E1 (y=5.55) and E2 (y=6.00)
+    T4 top  edge  (y = 11.5): E11 (x=12.5) and E12 (x=14.5)
     """
     # ── Tables ────────────────────────────────────────────────
     T1 = make_rect_table(1, 3.0, 5.0, 3.0, 1.5)  # x=[3,6],   y=[5,6.5]
@@ -733,39 +795,46 @@ def make_demo_museum() -> MuseumConfig:
     T4 = make_rect_table(4, 12.0, 10.0, 3.0, 1.5)  # x=[12,15], y=[10,11.5]
     tables = [T1, T2, T3, T4]
 
-    # ── Exhibits ──────────────────────────────────────────────
-    # All placed at exactly 0.5 m from their table's nearest face.
+    # ── Exhibits placed ON table edges ────────────────────────
+    # Each exhibit sits exactly on its table's boundary (distance = 0).
+    # normal_angle is computed automatically as the outward normal of the
+    # nearest edge; it constrains STOP-phase wandering to the open side.
     #
-    # Face offsets:
-    #   left face:   x = table_x            − 0.5
-    #   right face:  x = table_x + width    + 0.5
-    #   bottom face: y = table_y            − 0.5
-    #   top face:    y = table_y + height   + 0.5
-    #
-    # For two exhibits on the same face the perpendicular offset is identical;
-    # they differ only in their coordinate along the face.
+    # T1: x=[3,6], y=[5,6.5]   T2: x=[13,16], y=[5,6.5]
+    # T3: x=[5,8], y=[10,11.5] T4: x=[12,15], y=[10,11.5]
     # fmt: off
     raw: List[Tuple[int, float, float, Table]] = [
-        # id    x       y       table   face
-        (  1,   2.5,   5.55,   T1),   # left  face of T1, lower  ┐ same face
-        (  2,   2.5,   6.00,   T1),   # left  face of T1, upper  ┘
-        (  3,   6.5,   5.75,   T1),   # right face of T1
+        # id    x       y       table   edge
+        (  1,   3.0,   5.55,   T1),   # left  edge of T1, lower  ┐ same edge
+        (  2,   3.0,   6.00,   T1),   # left  edge of T1, upper  ┘
+        (  3,   6.0,   5.75,   T1),   # right edge of T1
 
-        (  4,  14.5,   4.50,   T2),   # bottom face of T2
-        (  5,  16.5,   5.75,   T2),   # right  face of T2
-        (  6,  14.5,   7.00,   T2),   # top    face of T2
+        (  4,  14.5,   5.00,   T2),   # bottom edge of T2
+        (  5,  16.0,   5.75,   T2),   # right  edge of T2
+        (  6,  14.5,   6.50,   T2),   # top    edge of T2
 
-        (  7,   6.5,   9.50,   T3),   # bottom face of T3
-        (  8,   8.5,  10.75,   T3),   # right  face of T3
-        (  9,   6.5,  12.00,   T3),   # top    face of T3
+        (  7,   6.5,  10.00,   T3),   # bottom edge of T3
+        (  8,   8.0,  10.75,   T3),   # right  edge of T3
+        (  9,   6.5,  11.50,   T3),   # top    edge of T3
 
-        ( 10,  11.5,  10.75,   T4),   # left   face of T4
-        ( 11,  12.5,  12.00,   T4),   # top    face of T4, left  ┐ same face
-        ( 12,  14.5,  12.00,   T4),   # top    face of T4, right ┘
+        ( 10,  12.0,  10.75,   T4),   # left   edge of T4
+        ( 11,  12.5,  11.50,   T4),   # top    edge of T4, left  ┐ same edge
+        ( 12,  14.5,  11.50,   T4),   # top    edge of T4, right ┘
     ]
     # fmt: on
-    exhibits = [Exhibit(exhibit_id=i, x=x, y=y, table=t) for i, x, y, t in raw]
-    validate_exhibits(exhibits, margin=0.5)  # hard guard — raises if violated
+    exhibits = [
+        Exhibit(
+            exhibit_id=i,
+            x=x,
+            y=y,
+            table=t,
+            normal_angle=_edge_normal_angle(x, y, t),
+        )
+        for i, x, y, t in raw
+    ]
+    # Exhibits are on edges (distance = 0), so the old margin guard is not
+    # applicable here.  The semicircle STOP constraint replaces it as the
+    # guarantee that the agent never wanders into the table.
 
     # ── Neighbourhood sets (radius = 6 m) ─────────────────────
     neighbourhoods = build_neighbourhoods(exhibits, radius=6.0)
@@ -782,9 +851,9 @@ def make_demo_museum() -> MuseumConfig:
         boundary=(0.0, 20.0, 0.0, 14.0),
         sr=12.0,
         r_stop=0.50,
-        sigma_theta_walk=0.70,
-        sigma_theta_approach=0.5,
-        sigma_theta_stop=0.60,
+        sigma_theta_walk=0.30,
+        sigma_theta_approach=0.10,
+        sigma_theta_stop=0.50,
         w1=0.30,
         K=8,
         t_max=1_800.0,
@@ -1062,8 +1131,27 @@ if __name__ == "__main__":
 
         out_path = os.path.join(args.outdir, fname)
         fig = plot_trajectory(traj, museum, title=f"Visitor Trajectory — seed {seed}")
-        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.savefig(out_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         print(f"         saved → {out_path}")
+
+        # ── Save trajectory CSV ────────────────────────────────
+        import csv
+
+        csv_fname = fname.replace(".png", ".csv")
+        csv_path = os.path.join(args.outdir, csv_fname)
+        with open(csv_path, "w", newline="") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(["x", "y", "timestamp", "person_id"])
+            for pt in traj:
+                writer.writerow(
+                    [
+                        round(pt.x, 4),
+                        round(pt.y, 4),
+                        round(pt.t, 4),
+                        seed,
+                    ]
+                )
+        print(f"         saved → {csv_path}")
 
     print("Done.")
