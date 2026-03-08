@@ -34,56 +34,29 @@ $k > 1:$ more toward boundary.
 
 ## Distributions
 
-## Distributions
+**Speed $(v)$ perturbation:**
 
-**Speed (v) perturbation**
+$v \mid phase = \begin{cases} \text{Beta}(2.0, 10.1) \text{ scaled to } [0.50, 2.60] & \texttt{WALK} \\ \text{Uniform}(0.3, 0.7) & \texttt{APPROACH} \\ \text{Uniform}(0.1, 0.25) & \texttt{STOP} \end{cases}$
 
-```
-v | phase  ~  Beta(2.0, 10.1) scaled to [0.50, 2.60]   if WALK
-           ~  Uniform(0.3, 0.7)                        if APPROACH
-           ~  Uniform(0.1, 0.25)                       if STOP
-```
+**Heading direction $(\theta)$ perturbation:**
 
-**Heading direction (θ) perturbation**
+$\Delta\theta \mid phase = \begin{cases} \mathcal{N}(0, \sigma_{\theta,w}) & \texttt{WALK} \\ \mathcal{N}(0, \sigma_{\theta,a}) & \texttt{APPROACH} \\ \mathcal{N}(0, \sigma_{\theta,s}) & \texttt{STOP} \end{cases}$
 
-```
-Δθ | phase  ~  Normal(0, σθ,w)   if WALK
-               Normal(0, σθ,a)   if APPROACH
-               Normal(0, σθ,s)   if STOP
-```
+**Bernoulli gates (determine how frequently $v,$ $\theta$ change):**
 
-**Bernoulli gates (determine how frequently v, θ change)**
+$p_v \mid phase = \begin{cases} 0.5 & \texttt{WALK} \\ 0.3 & \texttt{APPROACH} \\ 0.66 & \texttt{STOP} \end{cases} \qquad p_\theta \mid phase = \begin{cases} 0.5 & \texttt{WALK} \\ 0.3 & \texttt{APPROACH} \\ 0.75 & \texttt{STOP} \end{cases}$
 
-```
-p_v | phase  ~  0.5   if WALK
-             ~  0.3   if APPROACH
-             ~  0.66  if STOP
+**Dwell time:**
 
-p_θ | phase  ~  0.5   if WALK
-             ~  0.3   if APPROACH
-             ~  0.75  if STOP
-```
+$\tau_E \sim \text{Beta}(1.9, 4.0) \text{ scaled to } [11, 180] \text{ seconds} \qquad \text{(mode} \approx 50\text{s)}$
 
-**Dwell time**
+**Start position:**
 
-```
-τ_E  ~  Beta(1.9, 4.0) scaled to [11, 180] seconds  (mode ≈ 50 s)
-```
+$x \sim \text{Uniform}(x_{min}^{start}, x_{max}^{start}), \quad y \sim \text{Uniform}(y_{min}^{start}, y_{max}^{start})$
 
-**Start position**
+**Exhibit selection:**
 
-```
-x ~ Uniform(x_min^start, x_max^start)
-y ~ Uniform(y_min^start, y_max^start)
-```
-
-**Exhibit selection**
-
-```
-E  ~  Uniform(E_start)                         initial exhibit
-   ~  Uniform(N_Eprev \ E_visited)             if not empty
-   ~  Uniform(EXH \ E_visited)                 otherwise (fallback)
-```
+$E \sim \begin{cases} \text{Uniform}(\mathcal{E}_{start}) & \text{initial exhibit} \\ \text{Uniform}(N_{E_{prev}} \setminus E_{visited}) & \text{if } N_{E_{prev}} \setminus E_{visited} \neq \emptyset \\ \text{Uniform}(EXH \setminus E_{visited}) & \text{otherwise (fallback)} \end{cases}$
 
 ---
 
