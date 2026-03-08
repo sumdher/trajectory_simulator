@@ -89,7 +89,7 @@ $\texttt{\# pick the smaller partition: fewest vertices -> shortest detour:}$
 4. **if** $|V^+| < |V^-|:$ &nbsp; $V := V^+$
 5. **else if** $|V^-| < |V^+|:$ &nbsp; $V := V^-$
 6. **else:** &nbsp; $V :=$ whichever of $V^+,\, V^-$ contains the vertex nearest to $S$ $\texttt{\# tie-break}$
-7. **if** $V = \emptyset:$ &nbsp; **return** $\texttt{\# L passes exactly through vertices — no detour needed}$
+7. **if** $V = \emptyset:$ &nbsp; **return** $\texttt{\# L passes exactly through vertices, no detour}$
 8. $\nu_{start} := \arg\min_{\nu \in V} D(\nu, S)$ $\texttt{\# start from V-vertex closest to S}$
 9. $i := index(\nu_{start},\, T_{blocking})$
 10. **if** $vertices(T_{blocking})[(i + 1) \bmod |vertices(T_{blocking})|] \in V:$ &nbsp; $\delta := +1$ &nbsp; **else:** &nbsp; $\delta := -1$ $\texttt{\# CCW or CW}$
