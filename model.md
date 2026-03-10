@@ -57,7 +57,9 @@ $$v \mid \texttt{WALK} = \begin{cases} \text{Beta}(2.0,\,10.1) \to [0.30,\,1.20]
 
 $$v \mid phase = \begin{cases} \text{Uniform}(0.3,\,0.7)\,\text{m/s} & \texttt{APPROACH} \\ \text{Uniform}(0.1,\,0.25)\,\text{m/s} & \texttt{STOP} \end{cases}$$
 
-**Heading perturbation:** $\Delta\theta \mid phase \sim \mathcal{N}(0,\,\sigma_{\theta,phase})$
+**Heading perturbation:**
+
+$$\Delta\theta \mid phase \sim \begin{cases} \mathcal{N}(0,\; 0.80) & \texttt{WALK} \\ \mathcal{N}(0,\; 0.50) & \texttt{APPROACH} \\ \mathcal{N}(0,\; 0.656) & \texttt{STOP} \end{cases}$$
 
 **Bernoulli gates:**
 
